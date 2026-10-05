@@ -1,0 +1,1955 @@
+<!DOCTYPE html>
+<html lang="fr" translate="no">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="google" content="notranslate">
+    <meta name="theme-color" content="#0f172a">
+	<link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#0284c7">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Suivi des Commandes & Chantiers</title>
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <link rel="stylesheet"
+          href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+
+    <style>
+        * { box-sizing: border-box; }
+
+        html { scroll-behavior: smooth; }
+
+        body {
+            margin: 0;
+            background: #f1f5f9;
+            color: #0f172a;
+            font-family: Arial, Helvetica, sans-serif;
+        }
+
+        button, input { font-family: inherit; }
+
+        .app-container {
+            width: 100%;
+            max-width: 1500px;
+            margin: auto;
+        }
+
+        .card {
+            background: white;
+            border-radius: 16px;
+            border: 1px solid #e2e8f0;
+            box-shadow: 0 4px 15px rgba(15, 23, 42, .06);
+        }
+
+        .tab-button { transition: .2s; }
+
+        .tab-button.active {
+            background: #2563eb;
+            color: white;
+            box-shadow: 0 4px 10px rgba(37, 99, 235, .25);
+        }
+
+        .chantier-row { transition: .15s; }
+        .chantier-row:hover { background: #f8fafc; }
+
+        .commande-row { transition: .15s; }
+        .commande-row.clickable { cursor: pointer; }
+        .commande-row.clickable:hover { background: #eff6ff; }
+        .commande-row.missing { border-left: 4px solid #ef4444; }
+
+        .progress-track {
+            width: 100%;
+            height: 8px;
+            border-radius: 999px;
+            background: #e2e8f0;
+            overflow: hidden;
+        }
+
+        .progress-bar {
+            height: 100%;
+            border-radius: 999px;
+            transition: width .3s ease;
+        }
+
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            padding: 4px 8px;
+            border-radius: 999px;
+            font-size: 11px;
+            font-weight: 700;
+            white-space: nowrap;
+        }
+
+        .thumb {
+            width: 48px;
+            height: 48px;
+            object-fit: contain;
+            border-radius: 8px;
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            flex-shrink: 0;
+        }
+
+        .thumb-lg {
+            width: 56px;
+            height: 56px;
+        }
+
+        .modal-overlay {
+            position: fixed;
+            inset: 0;
+            z-index: 1000;
+            background: rgba(15, 23, 42, .65);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 15px;
+        }
+
+        .modal-box {
+            width: 100%;
+            max-width: 1000px;
+            max-height: 92vh;
+            overflow-y: auto;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 25px 60px rgba(0,0,0,.3);
+        }
+
+        .mobile-bottom-nav { display: none; }
+
+        .empty-state {
+            padding: 45px 20px;
+            text-align: center;
+            color: #64748b;
+        }
+
+        .table-scroll {
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        .table-scroll table { min-width: 850px; }
+
+        @media (max-width: 768px) {
+
+            body { padding-bottom: 76px; }
+
+            .app-container {
+                padding-left: 10px !important;
+                padding-right: 10px !important;
+            }
+
+            header {
+                padding: 12px !important;
+                border-radius: 14px !important;
+            }
+
+            header h1 {
+                font-size: 18px !important;
+                line-height: 1.2;
+            }
+
+            header p { font-size: 11px !important; }
+
+            .desktop-tabs { display: none !important; }
+
+            .mobile-bottom-nav {
+                position: fixed;
+                display: flex;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                z-index: 900;
+                height: 68px;
+                background: rgba(255,255,255,.97);
+                backdrop-filter: blur(12px);
+                border-top: 1px solid #cbd5e1;
+                box-shadow: 0 -4px 20px rgba(15,23,42,.10);
+            }
+
+            .mobile-bottom-nav button {
+                flex: 1;
+                border: 0;
+                background: transparent;
+                color: #64748b;
+                font-size: 11px;
+                font-weight: 700;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                justify-content: center;
+                gap: 4px;
+            }
+
+            .mobile-bottom-nav button i { font-size: 20px; }
+            .mobile-bottom-nav button.active { color: #2563eb; }
+
+            .card { border-radius: 13px; }
+
+            .chantier-card { padding: 12px !important; }
+            .chantier-name { font-size: 14px !important; }
+
+            .mobile-command-card {
+                position: relative;
+                padding: 13px !important;
+            }
+
+            .mobile-command-card .state-icon {
+                position: absolute;
+                right: 12px;
+                top: 12px;
+            }
+
+            .mobile-command-card .article-number {
+                padding-right: 32px;
+                font-size: 13px;
+            }
+
+            .mobile-command-card .libelle {
+                font-size: 12px;
+                line-height: 1.35;
+                margin-top: 4px;
+            }
+
+            .mobile-command-card .data-grid {
+                display: grid;
+                grid-template-columns: repeat(2, 1fr);
+                gap: 7px;
+                margin-top: 12px;
+            }
+
+            .mobile-command-card .data-box {
+                background: #f8fafc;
+                border-radius: 8px;
+                padding: 7px;
+            }
+
+            .mobile-command-card .data-label {
+                font-size: 9px;
+                color: #64748b;
+                text-transform: uppercase;
+                font-weight: 700;
+            }
+
+            .mobile-command-card .data-value {
+                margin-top: 2px;
+                font-size: 12px;
+                font-weight: 700;
+            }
+
+            .modal-overlay {
+                align-items: flex-end;
+                padding: 0;
+            }
+
+            .modal-box {
+                max-height: 94vh;
+                border-radius: 20px 20px 0 0;
+            }
+
+            .modal-box .modal-header {
+                position: sticky;
+                top: 0;
+                z-index: 5;
+                background: white;
+            }
+
+            .hide-mobile { display: none !important; }
+        }
+
+        @media (min-width: 769px) {
+            .mobile-only { display: none !important; }
+        }
+    </style>
+</head>
+
+<body>
+
+<div class="app-container px-4 py-4">
+
+    <!-- HEADER -->
+    <header class="bg-slate-900 text-white rounded-2xl p-5 mb-4 shadow-lg">
+        <div class="flex items-center justify-between gap-3">
+            <div>
+                <h1 class="text-2xl font-bold">
+                    <i class="fa-solid fa-boxes-stacked mr-2 text-blue-400"></i>
+                    Suivi des Commandes
+                </h1>
+                <p class="text-slate-300 mt-1">
+                    Gestion des commandes et avancement des chantiers
+                </p>
+            </div>
+
+            <button
+                onclick="chargerDonnees()"
+                class="bg-white/10 hover:bg-white/20 rounded-xl px-4 py-3">
+                <i class="fa-solid fa-rotate"></i>
+                <span class="hidden md:inline ml-1">Actualiser</span>
+            </button>
+        </div>
+    </header>
+
+    <!-- ONGLETS DESKTOP -->
+    <div class="desktop-tabs card p-2 mb-4 flex gap-2">
+        <button id="tab-chantiers"
+                onclick="changerOnglet('chantiers')"
+                class="tab-button active px-5 py-3 rounded-xl font-bold">
+            <i class="fa-solid fa-helmet-safety mr-2"></i>
+            Chantiers
+        </button>
+
+        <button id="tab-global"
+                onclick="changerOnglet('global')"
+                class="tab-button px-5 py-3 rounded-xl font-bold text-slate-600">
+            <i class="fa-solid fa-boxes-stacked mr-2"></i>
+            Commandes
+        </button>
+    </div>
+
+    <!-- ========================= -->
+    <!-- ONGLET CHANTIERS -->
+    <!-- ========================= -->
+
+    <section id="section-chantiers">
+
+        <div class="card p-4 mb-4">
+            <div class="flex flex-col md:flex-row md:items-center justify-between gap-3">
+
+                <div>
+                    <h2 class="font-bold text-lg">
+                        <i class="fa-solid fa-chart-column text-blue-600 mr-2"></i>
+                        Synthèse par chantier
+                    </h2>
+
+                    <p class="text-xs text-slate-500 mt-1">
+                        L'avancement est calculé uniquement avec
+                        <strong>Qté prévue</strong> et
+                        <strong>Qté livrée (`qt_livre`)</strong>.
+                    </p>
+                </div>
+
+                <div class="relative w-full md:w-80">
+                    <i class="fa-solid fa-magnifying-glass absolute left-3 top-3 text-slate-400"></i>
+
+                    <input
+                        id="searchChantier"
+                        type="text"
+                        placeholder="Rechercher un chantier..."
+                        oninput="filtrerChantiers()"
+                        class="w-full border border-slate-300 rounded-xl pl-10 pr-3 py-2.5 outline-none focus:ring-2 focus:ring-blue-500">
+                </div>
+
+            </div>
+        </div>
+
+        <div id="synthese-chantiers"
+             class="space-y-3">
+        </div>
+
+    </section>
+
+    <!-- ========================= -->
+    <!-- ONGLET COMMANDES -->
+    <!-- ========================= -->
+
+    <section id="section-global"
+             class="hidden">
+
+        <!-- FILTRE ACTIF -->
+        <div id="active-filter-badge"
+             class="hidden card p-3 mb-3 flex items-center justify-between gap-3">
+
+            <div class="flex items-center gap-2">
+                <i class="fa-solid fa-filter text-blue-600"></i>
+
+                <div>
+                    <div class="text-xs text-slate-500">
+                        Chantier sélectionné
+                    </div>
+
+                    <div id="filter-chantier-name"
+                         class="font-bold">
+                    </div>
+                </div>
+            </div>
+
+            <button
+                onclick="supprimerFiltreChantier()"
+                class="text-red-500 hover:text-red-700 px-3 py-2">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+        </div>
+
+        <!-- RECHERCHE -->
+        <div class="card p-4 mb-4">
+
+            <div class="flex flex-col md:flex-row gap-3">
+
+                <div class="relative flex-1">
+                    <i class="fa-solid fa-magnifying-glass absolute left-3 top-3 text-slate-400"></i>
+
+                    <input
+                        id="searchInput"
+                        type="text"
+                        placeholder="Rechercher chantier, numéro, libellé, fournisseur, BL..."
+                        oninput="filtrerLignes()"
+                        class="w-full border border-slate-300 rounded-xl pl-10 pr-3 py-2.5 outline-none focus:ring-2 focus:ring-blue-500">
+                </div>
+
+                <button
+                    onclick="supprimerFiltreChantier(); document.getElementById('searchInput').value=''; filtrerLignes();"
+                    class="px-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 font-bold text-slate-700">
+                    <i class="fa-solid fa-filter-circle-xmark mr-1"></i>
+                    Réinitialiser
+                </button>
+
+            </div>
+        </div>
+
+        <!-- COMMANDES DESKTOP -->
+        <div class="card overflow-hidden hidden md:block">
+
+            <div class="table-scroll">
+
+                <table class="w-full text-sm">
+
+                    <thead class="bg-slate-900 text-white">
+                        <tr>
+                            <th class="text-left px-4 py-3">Chantier</th>
+                            <th class="text-center px-4 py-3">Image</th>
+                            <th class="text-left px-4 py-3">N°</th>
+                            <th class="text-left px-4 py-3">Libellé</th>
+                            <th class="text-right px-4 py-3">Qté prévue</th>
+                            <th class="text-right px-4 py-3">Qté livrée</th>
+                            <th class="text-right px-4 py-3">Manque</th>
+                            <th class="text-left px-4 py-3">BL</th>
+                            <th class="text-left px-4 py-3">Fournisseur</th>
+                            <th class="text-center px-4 py-3">État</th>
+                        </tr>
+                    </thead>
+
+                    <tbody id="commandes-table-body">
+                    </tbody>
+
+                </table>
+
+            </div>
+
+        </div>
+
+        <!-- COMMANDES MOBILE -->
+        <div id="commandes-mobile"
+             class="md:hidden space-y-3">
+        </div>
+
+    </section>
+
+</div>
+
+<!-- ========================= -->
+<!-- NAVIGATION MOBILE -->
+<!-- ========================= -->
+
+<div class="mobile-bottom-nav">
+
+    <button id="mobile-nav-chantiers"
+            onclick="changerOnglet('chantiers')"
+            class="active">
+
+        <i class="fa-solid fa-helmet-safety"></i>
+        <span>Chantiers</span>
+
+    </button>
+
+    <button id="mobile-nav-commandes"
+            onclick="changerOnglet('global')">
+
+        <i class="fa-solid fa-boxes-stacked"></i>
+        <span>Commandes</span>
+
+    </button>
+
+</div>
+
+<!-- ========================= -->
+<!-- MODALE ANALYSE -->
+<!-- ========================= -->
+
+<div id="modal-report"
+     class="modal-overlay hidden">
+
+    <div class="modal-box">
+
+        <div class="modal-header p-5 border-b border-slate-200 flex items-start justify-between gap-3">
+
+            <div class="flex items-center gap-3">
+                <div id="modal-thumb-container"></div>
+                <div>
+                    <div class="text-xs uppercase font-bold text-blue-600 mb-1">
+                        Analyse disponibilité
+                    </div>
+
+                    <h2 id="modal-title"
+                        class="text-xl font-bold">
+                    </h2>
+
+                    <p id="modal-subtitle"
+                       class="text-sm text-slate-500 mt-1">
+                    </p>
+                </div>
+            </div>
+
+            <button
+                onclick="fermerModal()"
+                class="w-10 h-10 rounded-xl bg-slate-100 hover:bg-slate-200 flex items-center justify-center">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+
+        </div>
+
+        <div id="modal-content"
+             class="p-5">
+        </div>
+
+    </div>
+
+</div>
+
+<!-- ========================= -->
+<!-- JAVASCRIPT -->
+<!-- ========================= -->
+
+<script>
+
+const SUPABASE_URL = 'https://thbqkeugjvsxbryfnzuo.supabase.co';
+
+const SUPABASE_KEY =
+    'sb_publishable_2-Ij-nrTPeK6rB-kSD-QTg_b42zNakq';
+
+const _supabase =
+    supabase.createClient(
+        SUPABASE_URL,
+        SUPABASE_KEY
+    );
+
+let globalData = [];
+let filteredGlobalData = [];
+let currentChantierFilter = '';
+
+/* =========================================================
+   OUTILS NOMBRES
+   ========================================================= */
+
+function lireNombre(valeur) {
+
+    if (
+        valeur === null ||
+        valeur === undefined ||
+        valeur === ''
+    ) {
+        return 0;
+    }
+
+    let texte = String(valeur)
+        .trim()
+        .replace(/\s/g, '')
+        .replace(',', '.');
+
+    const nombre = parseFloat(texte);
+
+    return Number.isFinite(nombre)
+        ? nombre
+        : 0;
+}
+
+function calculerQtLivre(item) {
+    return lireNombre(item.qt_livre);
+}
+
+function calculerQuantiteLivreeReelle(item) {
+    const livreBrut = lireNombre(item.qt_livre);
+    const facteur =
+        lireNombre(
+            item.facteur_conversion ||
+            item.cond_valeur ||
+            1
+        ) || 1;
+
+    return livreBrut * facteur;
+}
+
+function formaterNombre(nombre) {
+    return new Intl.NumberFormat('fr-FR', {
+        maximumFractionDigits: 2
+    }).format(nombre);
+}
+
+function normaliserTexte(valeur) {
+    return String(valeur || '')
+        .trim()
+        .toLowerCase();
+}
+
+
+/* =========================================================
+   MINIATURES (bucket Supabase MIGNATURE_K1)
+   ========================================================= */
+
+/* =========================================================
+   MINIATURES (via SDK Supabase)
+   ========================================================= */
+
+function miniatureHtml(numero, classe = 'thumb') {
+    const rawNum = String(numero || '').trim();
+    if (!rawNum) return '';
+
+    // Remplit avec des zéros à gauche pour obtenir 8 caractères (ex: 774 devient 00000774)
+    const n = rawNum.padStart(8, '0');
+
+    const { data } = _supabase.storage
+        .from('MIGNATURE_K1')
+        .getPublicUrl(n + '.jpg');
+
+    const publicUrl = data ? data.publicUrl : '';
+
+    return `<img src="${escapeHtml(publicUrl)}"
+                 class="${classe}"
+                 loading="lazy"
+                 alt=""
+                 onerror="this.onerror=null; this.src='data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' width=\'48\' height=\'48\' viewBox=\'0 0 24 24\' fill=\'none\' stroke=\'%23cbd5e1\' stroke-width=\'2\'><rect width=\'18\' height=\'18\' x=\'3\' y=\'3\' rx=\'2\'/><path d=\'m9 15 3-3 3 3\'/><path d=\'M12 12v6\'/></svg>';">`;
+}
+
+/* =========================================================
+   SYNTHESE CHANTIERS
+   ========================================================= */
+
+function afficherSyntheseChantiers(
+    data,
+    recherche = ''
+) {
+
+    const container =
+        document.getElementById(
+            'synthese-chantiers'
+        );
+
+    const regroupement = {};
+
+    data.forEach(item => {
+
+        const chantier =
+            String(item.Chantier || '').trim();
+
+        if (!chantier) return;
+
+        if (
+            recherche &&
+            !normaliserTexte(chantier)
+                .includes(normaliserTexte(recherche))
+        ) {
+            return;
+        }
+
+        if (!regroupement[chantier]) {
+
+            regroupement[chantier] = {
+                chantier,
+                prevu: 0,
+                livre: 0,
+                lignes: 0,
+                manque: 0
+            };
+        }
+
+        const prevu =
+            lireNombre(item.qt_prevu);
+
+        const livre =
+            calculerQtLivre(item);
+
+        regroupement[chantier].prevu += prevu;
+        regroupement[chantier].livre += livre;
+
+        regroupement[chantier].lignes++;
+    });
+
+    const chantiers =
+        Object.values(regroupement);
+
+    chantiers.forEach(c => {
+
+        c.manque =
+            Math.max(
+                0,
+                c.prevu - c.livre
+            );
+
+        c.pct =
+            c.prevu > 0
+                ? (c.livre / c.prevu) * 100
+                : 0;
+    });
+
+    chantiers.sort((a, b) =>
+        a.chantier.localeCompare(
+            b.chantier,
+            'fr'
+        )
+    );
+
+    if (!chantiers.length) {
+
+        container.innerHTML = `
+            <div class="card empty-state">
+                <i class="fa-solid fa-magnifying-glass text-3xl mb-3"></i>
+                <div class="font-bold">
+                    Aucun chantier trouvé
+                </div>
+            </div>
+        `;
+
+        return;
+    }
+
+    container.innerHTML =
+        chantiers.map(c => {
+
+            const pctAffiche =
+                Math.round(c.pct);
+
+            let progressWidth =
+                Math.min(100, Math.max(0, c.pct));
+
+            let progressClass =
+                'bg-blue-600';
+
+            let badgeClass =
+                'bg-blue-100 text-blue-700';
+
+            let statut =
+                'En cours';
+
+            if (c.pct >= 100) {
+
+                progressClass =
+                    'bg-emerald-500';
+
+                badgeClass =
+                    'bg-emerald-100 text-emerald-700';
+
+                statut =
+                    'Livré';
+            }
+            else if (c.pct >= 75) {
+
+                progressClass =
+                    'bg-amber-500';
+
+                badgeClass =
+                    'bg-amber-100 text-amber-700';
+
+                statut =
+                    'Avancement';
+            }
+            else if (c.pct === 0) {
+
+                progressClass =
+                    'bg-slate-400';
+
+                badgeClass =
+                    'bg-slate-100 text-slate-700';
+
+                statut =
+                    'À commander';
+            }
+
+            return `
+
+                <div class="card chantier-card p-4 chantier-row">
+
+                    <div class="flex flex-col md:flex-row md:items-center gap-4">
+
+                        <div class="flex-1 min-w-0">
+
+                            <div class="flex items-center gap-2">
+
+                                <div class="chantier-name font-bold text-lg truncate">
+                                    ${escapeHtml(c.chantier)}
+                                </div>
+
+                                <span class="badge ${badgeClass}">
+                                    ${statut}
+                                </span>
+
+                            </div>
+
+                            <div class="text-xs text-slate-500 mt-1">
+                                ${c.lignes} ligne${c.lignes > 1 ? 's' : ''}
+                            </div>
+
+                        </div>
+
+                        <div class="grid grid-cols-3 gap-3 text-center md:w-[380px]">
+
+                            <div>
+                                <div class="text-[10px] uppercase text-slate-400 font-bold">
+                                    Prévu
+                                </div>
+
+                                <div class="font-bold">
+                                    ${formaterNombre(c.prevu)}
+                                </div>
+                            </div>
+
+                            <div>
+                                <div class="text-[10px] uppercase text-slate-400 font-bold">
+                                    Livré
+                                </div>
+
+                                <div class="font-bold text-emerald-600">
+                                    ${formaterNombre(c.livre)}
+                                </div>
+                            </div>
+
+                            <div>
+                                <div class="text-[10px] uppercase text-slate-400 font-bold">
+                                    Manque
+                                </div>
+
+                                <div class="font-bold ${c.manque > 0 ? 'text-red-600' : 'text-slate-500'}">
+                                    ${formaterNombre(c.manque)}
+                                </div>
+                            </div>
+
+                        </div>
+
+                    </div>
+
+                    <div class="mt-4">
+
+                        <div class="flex justify-between items-center mb-1">
+
+                            <span class="text-xs text-slate-500 font-semibold">
+                                Avancement
+                            </span>
+
+                            <span class="text-sm font-bold
+                                ${c.pct >= 100
+                                    ? 'text-emerald-600'
+                                    : 'text-blue-600'}">
+
+                                ${pctAffiche} %
+
+                            </span>
+
+                        </div>
+
+                        <div class="progress-track">
+
+                            <div
+                                class="progress-bar ${progressClass}"
+                                style="width:${progressWidth}%">
+                            </div>
+
+                        </div>
+
+                    </div>
+
+                    <div class="mt-4 flex justify-end">
+
+                        <button
+                            onclick="voirDetailChantier(${JSON.stringify(c.chantier).replace(/"/g, '&quot;')})"
+                            class="px-4 py-2 rounded-xl bg-slate-900 hover:bg-slate-700 text-white text-sm font-bold">
+
+                            <i class="fa-solid fa-list mr-1"></i>
+                            Sous-détail
+
+                        </button>
+
+                    </div>
+
+                </div>
+            `;
+
+        }).join('');
+}
+
+
+/* =========================================================
+   FILTRE CHANTIERS
+   ========================================================= */
+
+function filtrerChantiers() {
+    const recherche =
+        document.getElementById(
+            'searchChantier'
+        ).value;
+
+    afficherSyntheseChantiers(
+        globalData,
+        recherche
+    );
+}
+
+
+/* =========================================================
+   AFFICHAGE COMMANDES
+   ========================================================= */
+
+function afficherLignes(data) {
+
+    const tbody =
+        document.getElementById(
+            'commandes-table-body'
+        );
+
+    const mobile =
+        document.getElementById(
+            'commandes-mobile'
+        );
+
+    if (!data.length) {
+
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="10">
+                    <div class="empty-state">
+                        <i class="fa-solid fa-box-open text-3xl mb-3"></i>
+                        <div class="font-bold">
+                            Aucune commande trouvée
+                        </div>
+                    </div>
+                </td>
+            </tr>
+        `;
+
+        mobile.innerHTML = `
+            <div class="card empty-state">
+                <i class="fa-solid fa-box-open text-3xl mb-3"></i>
+                <div class="font-bold">
+                    Aucune commande trouvée
+                </div>
+            </div>
+        `;
+
+        return;
+    }
+
+    tbody.innerHTML =
+        data.map(item => {
+
+            const prevu =
+                lireNombre(item.qt_prevu);
+
+            const livre =
+                calculerQtLivre(item);
+
+            const manque =
+                Math.max(
+                    0,
+                    prevu - livre
+                );
+
+            const chantier =
+                item.Chantier || '';
+
+            const numero =
+                item.numero || '';
+
+            const libelle =
+                item.libelle || '';
+
+            const fournisseur =
+                item.fournisseur || '';
+
+            const bl =
+                item.bl || '';
+
+            const estEnManque =
+                manque > 0;
+
+            return `
+
+                <tr
+                    class="commande-row
+                        ${estEnManque ? 'missing clickable' : ''}
+                        border-b border-slate-100"
+                    ${estEnManque
+                        ? `onclick="ouvrirModalReport(${getItemIndex(item)})"`
+                        : ''}>
+
+                    <td class="px-4 py-3 font-bold">
+                        ${escapeHtml(chantier)}
+                    </td>
+
+                    <td class="px-4 py-3 text-center">
+                        ${miniatureHtml(numero)}
+                    </td>
+
+                    <td class="px-4 py-3 font-mono text-xs">
+                        ${escapeHtml(numero)}
+                    </td>
+
+                    <td class="px-4 py-3">
+                        <div class="font-semibold">
+                            ${escapeHtml(libelle)}
+                        </div>
+                    </td>
+
+                    <td class="px-4 py-3 text-right font-bold">
+                        ${formaterNombre(prevu)}
+                    </td>
+
+                    <td class="px-4 py-3 text-right font-bold text-emerald-600">
+                        ${formaterNombre(livre)}
+                    </td>
+
+                    <td class="px-4 py-3 text-right font-bold
+                        ${manque > 0
+                            ? 'text-red-600'
+                            : 'text-slate-400'}">
+
+                        ${formaterNombre(manque)}
+
+                    </td>
+
+                    <td class="px-4 py-3 font-mono text-xs">
+                        ${escapeHtml(bl)}
+                    </td>
+
+                    <td class="px-4 py-3 text-xs">
+                        ${escapeHtml(fournisseur)}
+                    </td>
+
+                    <td class="px-4 py-3 text-center">
+
+                        ${
+                            estEnManque
+
+                            ? `
+                                <i
+                                    class="fa-solid fa-magnifying-glass
+                                           text-indigo-600"
+                                    title="Analyser la disponibilité">
+                                </i>
+                            `
+
+                            : `
+                                <i
+                                    class="fa-solid fa-circle-check
+                                           text-emerald-500"
+                                    title="Quantité suffisante">
+                                </i>
+                            `
+                        }
+
+                    </td>
+
+                </tr>
+            `;
+
+        }).join('');
+
+    mobile.innerHTML =
+        data.map(item => {
+
+            const prevu =
+                lireNombre(item.qt_prevu);
+
+            const livre =
+                calculerQtLivre(item);
+
+            const manque =
+                Math.max(
+                    0,
+                    prevu - livre
+                );
+
+            const estEnManque =
+                manque > 0;
+
+            return `
+
+                <div
+                    class="card mobile-command-card
+                        ${estEnManque ? 'missing clickable' : ''}"
+                    ${estEnManque
+                        ? `onclick="ouvrirModalReport(${getItemIndex(item)})"`
+                        : ''}>
+
+                    <div class="state-icon">
+
+                        ${
+                            estEnManque
+
+                            ? `
+                                <i class="fa-solid fa-magnifying-glass
+                                          text-indigo-600">
+                                </i>
+                            `
+
+                            : `
+                                <i class="fa-solid fa-circle-check
+                                          text-emerald-500">
+                                </i>
+                            `
+                        }
+
+                    </div>
+
+                    <div class="flex gap-3 items-start">
+
+                        ${miniatureHtml(item.numero, 'thumb thumb-lg')}
+
+                        <div class="flex-1 min-w-0">
+
+                            <div class="article-number font-mono font-bold text-blue-700">
+                                ${escapeHtml(item.numero || '')}
+                            </div>
+
+                            <div class="text-[10px] text-slate-500 font-bold uppercase mt-1">
+                                ${escapeHtml(item.Chantier || '')}
+                            </div>
+
+                            <div class="libelle font-semibold">
+                                ${escapeHtml(item.libelle || '')}
+                            </div>
+
+                        </div>
+
+                    </div>
+
+                    <div class="data-grid">
+
+                        <div class="data-box">
+                            <div class="data-label">Prévu</div>
+                            <div class="data-value">${formaterNombre(prevu)}</div>
+                        </div>
+
+                        <div class="data-box">
+                            <div class="data-label">Livré</div>
+                            <div class="data-value text-emerald-600">${formaterNombre(livre)}</div>
+                        </div>
+
+                        <div class="data-box">
+                            <div class="data-label">Manque</div>
+                            <div class="data-value ${manque > 0 ? 'text-red-600' : 'text-slate-500'}">
+                                ${formaterNombre(manque)}
+                            </div>
+                        </div>
+
+                        <div class="data-box">
+                            <div class="data-label">BL</div>
+                            <div class="data-value font-mono">${escapeHtml(item.bl || '—')}</div>
+                        </div>
+
+                    </div>
+
+                    ${
+                        estEnManque
+                        ? `
+                            <div class="mt-3 text-[10px] text-indigo-600 font-bold">
+                                <i class="fa-solid fa-hand-pointer mr-1"></i>
+                                Appuyer pour analyser la disponibilité
+                            </div>
+                        `
+                        : ''
+                    }
+
+                </div>
+            `;
+
+        }).join('');
+}
+
+
+/* =========================================================
+   TRI
+   ========================================================= */
+
+function trierEtAfficherLignes(data) {
+
+    const copie = [...data];
+
+    copie.sort((a, b) => {
+
+        const blA =
+            String(a.bl || '').trim();
+
+        const blB =
+            String(b.bl || '').trim();
+
+        if (!blA && blB) return -1;
+        if (blA && !blB) return 1;
+
+        const prevuA =
+            lireNombre(a.qt_prevu);
+
+        const livreA =
+            calculerQtLivre(a);
+
+        const manqueA =
+            Math.max(
+                0,
+                prevuA - livreA
+            );
+
+        const prevuB =
+            lireNombre(b.qt_prevu);
+
+        const livreB =
+            calculerQtLivre(b);
+
+        const manqueB =
+            Math.max(
+                0,
+                prevuB - livreB
+            );
+
+        return manqueB - manqueA;
+    });
+
+    filteredGlobalData = copie;
+
+    afficherLignes(copie);
+}
+
+
+function getItemIndex(item) {
+    return globalData.indexOf(item);
+}
+
+
+/* =========================================================
+   RECHERCHE COMMANDES
+   ========================================================= */
+
+function filtrerLignes() {
+
+    const query =
+        normaliserTexte(
+            document.getElementById(
+                'searchInput'
+            ).value
+        );
+
+    let base =
+        currentChantierFilter
+
+        ? globalData.filter(item =>
+            String(item.Chantier || '').trim()
+                === currentChantierFilter
+        )
+
+        : globalData;
+
+    const filtered =
+        base.filter(item => {
+
+            if (!query) return true;
+
+            const chantier =
+                normaliserTexte(item.Chantier);
+
+            const numero =
+                normaliserTexte(item.numero);
+
+            const libelle =
+                normaliserTexte(item.libelle);
+
+            const fournisseur =
+                normaliserTexte(item.fournisseur);
+
+            const bl =
+                normaliserTexte(item.bl);
+
+            return (
+                chantier.includes(query) ||
+                numero.includes(query) ||
+                libelle.includes(query) ||
+                fournisseur.includes(query) ||
+                bl.includes(query)
+            );
+        });
+
+    trierEtAfficherLignes(filtered);
+}
+
+
+/* =========================================================
+   DETAIL CHANTIER
+   ========================================================= */
+
+function voirDetailChantier(nomChantier) {
+
+    currentChantierFilter =
+        String(nomChantier || '').trim();
+
+    document.getElementById(
+        'filter-chantier-name'
+    ).innerText =
+        currentChantierFilter;
+
+    document.getElementById(
+        'active-filter-badge'
+    ).classList.remove('hidden');
+
+    document.getElementById(
+        'active-filter-badge'
+    ).classList.add('flex');
+
+    document.getElementById(
+        'searchInput'
+    ).value = '';
+
+    filteredGlobalData =
+        globalData.filter(item =>
+            String(item.Chantier || '').trim()
+                === currentChantierFilter
+        );
+
+    trierEtAfficherLignes(
+        filteredGlobalData
+    );
+
+    changerOnglet('global');
+}
+
+
+function supprimerFiltreChantier() {
+
+    currentChantierFilter = '';
+
+    document.getElementById(
+        'active-filter-badge'
+    ).classList.add('hidden');
+
+    document.getElementById(
+        'active-filter-badge'
+    ).classList.remove('flex');
+
+    if (
+        document.getElementById(
+            'searchInput'
+        )
+    ) {
+        document.getElementById(
+            'searchInput'
+        ).value = '';
+    }
+
+    trierEtAfficherLignes(
+        globalData
+    );
+}
+
+
+/* =========================================================
+   CHANGEMENT ONGLET
+   ========================================================= */
+
+function changerOnglet(onglet) {
+
+    const chantiers =
+        document.getElementById(
+            'section-chantiers'
+        );
+
+    const global =
+        document.getElementById(
+            'section-global'
+        );
+
+    const tabChantiers =
+        document.getElementById(
+            'tab-chantiers'
+        );
+
+    const tabGlobal =
+        document.getElementById(
+            'tab-global'
+        );
+
+    const mobileChantiers =
+        document.getElementById(
+            'mobile-nav-chantiers'
+        );
+
+    const mobileCommandes =
+        document.getElementById(
+            'mobile-nav-commandes'
+        );
+
+    if (onglet === 'chantiers') {
+
+        chantiers.classList.remove('hidden');
+        global.classList.add('hidden');
+
+        tabChantiers?.classList.add('active');
+        tabGlobal?.classList.remove('active');
+
+        mobileChantiers?.classList.add('active');
+        mobileCommandes?.classList.remove('active');
+
+    }
+    else {
+
+        chantiers.classList.add('hidden');
+        global.classList.remove('hidden');
+
+        tabChantiers?.classList.remove('active');
+        tabGlobal?.classList.add('active');
+
+        mobileChantiers?.classList.remove('active');
+        mobileCommandes?.classList.add('active');
+    }
+
+    if (window.innerWidth <= 768) {
+        window.scrollTo({
+            top: 0,
+            behavior: 'smooth'
+        });
+    }
+}
+
+
+/* =========================================================
+   MODALE DISPONIBILITE
+   ========================================================= */
+
+function ouvrirModalReport(index) {
+
+    const item =
+        globalData[index];
+
+    if (!item) return;
+
+    const numeroCible =
+        String(item.numero || '').trim();
+
+    const libelleCible =
+        normaliserTexte(item.libelle);
+
+    const prevuCible =
+        lireNombre(item.qt_prevu);
+
+    const livreCible =
+        calculerQtLivre(item);
+
+    const manqueCible =
+        Math.max(
+            0,
+            prevuCible - livreCible
+        );
+
+    document.getElementById(
+        'modal-title'
+    ).innerText =
+        item.numero || 'Article';
+
+    document.getElementById(
+        'modal-subtitle'
+    ).innerText =
+        item.libelle || '';
+
+    document.getElementById(
+        'modal-thumb-container'
+    ).innerHTML = miniatureHtml(item.numero, 'thumb thumb-lg');
+
+    const correspondances =
+        globalData.filter(other => {
+
+            const numeroOther =
+                String(other.numero || '').trim();
+
+            const libelleOther =
+                normaliserTexte(other.libelle);
+
+            if (
+                numeroCible &&
+                numeroOther === numeroCible
+            ) {
+                return true;
+            }
+
+            if (
+                libelleCible &&
+                libelleOther.includes(libelleCible)
+            ) {
+                return true;
+            }
+
+            return false;
+        });
+
+    const parChantier = {};
+
+    correspondances.forEach(other => {
+
+        const chantier =
+            String(other.Chantier || '').trim();
+
+        if (!chantier) return;
+
+        if (!parChantier[chantier]) {
+
+            parChantier[chantier] = {
+                chantier,
+                prevu: 0,
+                livre: 0,
+                lignes: 0,
+                bl: [],
+                fournisseur: []
+            };
+        }
+
+        parChantier[chantier].prevu +=
+            lireNombre(other.qt_prevu);
+
+        parChantier[chantier].livre +=
+            calculerQuantiteLivreeReelle(other);
+
+        parChantier[chantier].lignes++;
+
+        const bl =
+            String(other.bl || '').trim();
+
+        if (
+            bl &&
+            !parChantier[chantier].bl.includes(bl)
+        ) {
+            parChantier[chantier].bl.push(bl);
+        }
+
+        const fournisseur =
+            String(other.fournisseur || '').trim();
+
+        if (
+            fournisseur &&
+            !parChantier[chantier].fournisseur.includes(fournisseur)
+        ) {
+            parChantier[chantier].fournisseur.push(fournisseur);
+        }
+
+    });
+
+    const chantiers =
+        Object.values(parChantier);
+
+    chantiers.forEach(c => {
+        c.solde =
+            c.livre - c.prevu;
+
+        c.disponible =
+            Math.max(
+                0,
+                c.solde
+            );
+    });
+
+    const chantierCible =
+        String(item.Chantier || '').trim();
+
+    let disponibleAutresChantiers = 0;
+
+    chantiers.forEach(c => {
+        if (
+            c.chantier !== chantierCible
+        ) {
+            disponibleAutresChantiers +=
+                c.disponible;
+        }
+    });
+
+    let recommandation = '';
+    let recommandationClass = '';
+
+    if (disponibleAutresChantiers >= manqueCible) {
+
+        recommandation =
+            `La quantité manquante peut être couverte
+             par le disponible d'autres chantiers.`;
+
+        recommandationClass =
+            'bg-emerald-50 text-emerald-800 border-emerald-200';
+
+    }
+    else if (disponibleAutresChantiers > 0) {
+
+        const reste =
+            Math.max(
+                0,
+                manqueCible -
+                disponibleAutresChantiers
+            );
+
+        recommandation =
+            `Transfert partiel possible :
+             ${formaterNombre(disponibleAutresChantiers)}
+             disponible(s), puis
+             ${formaterNombre(reste)}
+             à commander.`;
+
+        recommandationClass =
+            'bg-amber-50 text-amber-800 border-amber-200';
+
+    }
+    else {
+
+        recommandation =
+            `Aucun surplus disponible sur les autres chantiers :
+             commande nécessaire pour couvrir le manque.`;
+
+        recommandationClass =
+            'bg-red-50 text-red-800 border-red-200';
+    }
+
+    document.getElementById(
+        'modal-content'
+    ).innerHTML = `
+
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
+
+            <div class="bg-slate-50 rounded-xl p-3">
+                <div class="text-[10px] uppercase text-slate-500 font-bold">
+                    Chantier
+                </div>
+                <div class="font-bold mt-1">
+                    ${escapeHtml(chantierCible)}
+                </div>
+            </div>
+
+            <div class="bg-slate-50 rounded-xl p-3">
+                <div class="text-[10px] uppercase text-slate-500 font-bold">
+                    Prévu
+                </div>
+                <div class="font-bold mt-1">
+                    ${formaterNombre(prevuCible)}
+                </div>
+            </div>
+
+            <div class="bg-emerald-50 rounded-xl p-3">
+                <div class="text-[10px] uppercase text-emerald-700 font-bold">
+                    Livré
+                </div>
+                <div class="font-bold text-emerald-700 mt-1">
+                    ${formaterNombre(livreCible)}
+                </div>
+            </div>
+
+            <div class="bg-red-50 rounded-xl p-3">
+                <div class="text-[10px] uppercase text-red-700 font-bold">
+                    Manque
+                </div>
+                <div class="font-bold text-red-700 mt-1">
+                    ${formaterNombre(manqueCible)}
+                </div>
+            </div>
+
+        </div>
+
+        <div class="border rounded-xl p-4 mb-5 ${recommandationClass}">
+
+            <div class="font-bold flex items-center gap-2">
+                <i class="fa-solid fa-lightbulb"></i>
+                Analyse
+            </div>
+
+            <div class="text-sm mt-2">
+                ${recommandation}
+            </div>
+
+            <div class="text-xs mt-2 opacity-80">
+                Disponible détecté sur les autres chantiers :
+                <strong>
+                    ${formaterNombre(disponibleAutresChantiers)}
+                </strong>
+            </div>
+
+        </div>
+
+        <div class="flex items-center justify-between mb-3">
+
+            <div>
+                <h3 class="font-bold">
+                    <i class="fa-solid fa-warehouse text-blue-600 mr-2"></i>
+                    Tous les chantiers
+                </h3>
+
+                <p class="text-xs text-slate-500">
+                    Chantiers possédant ce symbole ou cette référence
+                </p>
+            </div>
+
+            <div class="badge bg-slate-100 text-slate-700">
+                ${chantiers.length}
+            </div>
+
+        </div>
+
+        <div class="space-y-2">
+
+            ${
+                chantiers.length
+
+                ? chantiers.map(c => {
+
+                    let statut = '';
+                    let classe = '';
+
+                    if (c.solde > 0) {
+
+                        statut =
+                            `Disponible +${formaterNombre(c.solde)}`;
+
+                        classe =
+                            'bg-emerald-50 border-emerald-200 text-emerald-700';
+
+                    }
+                    else if (c.solde < 0) {
+
+                        statut =
+                            `Manque ${formaterNombre(Math.abs(c.solde))}`;
+
+                        classe =
+                            'bg-red-50 border-red-200 text-red-700';
+
+                    }
+                    else {
+
+                        statut =
+                            'Soldé';
+
+                        classe =
+                            'bg-slate-50 border-slate-200 text-slate-600';
+                    }
+
+                    return `
+
+                        <div class="border rounded-xl p-4 ${classe}">
+
+                            <div class="flex flex-col md:flex-row md:items-center gap-3">
+
+                                <div class="flex-1">
+
+                                    <div class="font-bold">
+                                        ${escapeHtml(c.chantier)}
+                                    </div>
+
+                                    ${
+                                        c.bl.length
+                                        ? `
+                                            <div class="text-xs mt-1">
+                                                BL :
+                                                ${escapeHtml(c.bl.join(', '))}
+                                            </div>
+                                        `
+                                        : ''
+                                    }
+
+                                </div>
+
+                                <div class="grid grid-cols-3 gap-4 text-center">
+
+                                    <div>
+                                        <div class="text-[9px] uppercase opacity-70">
+                                            Prévu
+                                        </div>
+
+                                        <div class="font-bold">
+                                            ${formaterNombre(c.prevu)}
+                                        </div>
+                                    </div>
+
+                                    <div>
+                                        <div class="text-[9px] uppercase opacity-70">
+                                            Livré
+                                        </div>
+
+                                        <div class="font-bold">
+                                            ${formaterNombre(c.livre)}
+                                        </div>
+                                    </div>
+
+                                    <div>
+                                        <div class="text-[9px] uppercase opacity-70">
+                                            Solde
+                                        </div>
+
+                                        <div class="font-bold">
+                                            ${formaterNombre(c.solde)}
+                                        </div>
+                                    </div>
+
+                                </div>
+
+                                <div class="min-w-[120px] text-right">
+
+                                    <span class="badge bg-white/70">
+                                        ${statut}
+                                    </span>
+
+                                </div>
+
+                            </div>
+
+                        </div>
+                    `;
+
+                }).join('')
+
+                : `
+                    <div class="empty-state border rounded-xl">
+                        <i class="fa-solid fa-box-open text-3xl mb-3"></i>
+                        <div>
+                            Aucun autre chantier ne possède ce symbole.
+                        </div>
+                    </div>
+                `
+            }
+
+        </div>
+
+    `;
+
+    document.getElementById(
+        'modal-report'
+    ).classList.remove('hidden');
+}
+
+
+function fermerModal() {
+    document.getElementById(
+        'modal-report'
+    ).classList.add('hidden');
+}
+
+
+document.getElementById(
+    'modal-report'
+).addEventListener(
+    'click',
+    function(e) {
+        if (
+            e.target === this
+        ) {
+            fermerModal();
+        }
+    }
+);
+
+
+/* =========================================================
+   CHARGEMENT SUPABASE
+   ========================================================= */
+
+async function chargerDonnees() {
+
+    try {
+
+        const {
+            data,
+            error
+        } =
+            await _supabase
+                .from('suivi_commandes')
+                .select('*');
+
+        if (error) {
+            throw error;
+        }
+
+        globalData =
+            data || [];
+
+        filteredGlobalData =
+            [...globalData];
+
+        currentChantierFilter = '';
+
+        document.getElementById(
+            'active-filter-badge'
+        ).classList.add('hidden');
+
+        document.getElementById(
+            'active-filter-badge'
+        ).classList.remove('flex');
+
+        document.getElementById(
+            'searchInput'
+        ).value = '';
+
+        document.getElementById(
+            'searchChantier'
+        ).value = '';
+
+        afficherSyntheseChantiers(
+            globalData
+        );
+
+        trierEtAfficherLignes(
+            globalData
+        );
+
+    }
+    catch (error) {
+
+        console.error(
+            'Erreur Supabase :',
+            error
+        );
+
+        document.getElementById(
+            'synthese-chantiers'
+        ).innerHTML = `
+
+            <div class="card p-5 border-red-200 bg-red-50 text-red-700">
+
+                <div class="font-bold">
+                    <i class="fa-solid fa-triangle-exclamation mr-2"></i>
+                    Impossible de charger les données
+                </div>
+
+                <div class="text-sm mt-2">
+                    ${escapeHtml(error.message || String(error))}
+                </div>
+
+            </div>
+        `;
+    }
+}
+
+
+function escapeHtml(value) {
+    return String(value ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+}
+
+
+document.addEventListener(
+    'DOMContentLoaded',
+    () => {
+        changerOnglet('chantiers');
+        chargerDonnees();
+    }
+);
+
+</script>
+<script>
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('sw.js')
+                .then(() => console.log("Service Worker enregistré avec succès"))
+                .catch((err) => console.log("Échec du Service Worker", err));
+        }
+    </script>
+</body>
+</body>
+</html>
